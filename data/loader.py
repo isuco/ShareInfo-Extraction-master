@@ -38,7 +38,7 @@ class DataLoader(object):
         data=[]
         for filename in filenames:
             with open(filename,'r') as infile:
-                data += json.load(infile)
+                data += json.load(infile)[:1280]
         self.data_json = data
         if is_aug:
             aug_data = self.simulatedatajson(data)
@@ -139,8 +139,8 @@ class DataLoader(object):
         for d in data:
             # if d['id']=='61b3a65fb91fbb9fcc5b':
             #     continue
-            # if d['id'] not in self.ids:
-            #     continue
+            if d['id'] not in self.ids:
+                continue
             # if (d['id'] in self.ids)^(d['id'] not in self.ids64):
             #     continue
             count+=1
@@ -187,9 +187,9 @@ class DataLoader(object):
                 relation = self.label2id[relation]
         else:
             relation = d['soft_label']
-        # if self.subj is not None:
-        #     if d['subj_type']!=self.subj or d['obj_type']!=self.obj:
-        #         return []
+        if self.subj is not None:
+            if d['subj_type']!=self.subj or d['obj_type']!=self.obj:
+                return []
         #rev_relation = 0
         # # if relation!=40:
         #     continue
@@ -219,11 +219,7 @@ class DataLoader(object):
         sid = rd['id']
         assert any([x == 0 for x in head])
         l = len(tokens)
-        # if d['subj_type']!='PERSON' and d['obj_type']!='PERSON':
-        #     return []
 
-        # if d['subj_type']=='PERSON' or d['obj_type']=='PERSON':
-        #     return []
         if not self.corefresolve:
             ss, se = rd['subj_start'], rd['subj_end']
             os, oe = rd['obj_start'], rd['obj_end']
@@ -295,8 +291,8 @@ class DataLoader(object):
             for i in range(len(tokens)):
                 if deprel[i] in entity_dep:
                     entity_ids.append([i])
-            tree, domains, distance, relpair, midhead= head_to_treeEval(head, deprel, relpairs,build_mid=True)
-            #tree, domains, distance,relpair,midhead,entity_chains,sdp_domain = head_to_treeEval(head, deprel, ner,pos,relpairs,build_mid=True)
+
+            tree, domains, distance,relpair,midhead,entity_chains,sdp_domain = head_to_treeEval(head, deprel, ner,pos,relpairs,build_mid=True)
             # filterrelpair=[]
             # for pair in relpairs:
             #     subj=pair[0]
@@ -331,8 +327,7 @@ class DataLoader(object):
                 # return []
             # else:
             #     tree, domains, distance, relpair, midhead = head_to_treeEval(head, deprel, relpairs, build_mid=False)
-            depmap, ret, rel, resrel, domain,domain_id,redomain_id = tree_to_adj(l, domains, tree)
-            #depmap, ret, rel, resrel, domain, sdp_domain = tree_to_adj(l, domains, tree,entity_chains,sdp_domain)
+            depmap, ret, rel, resrel, domain,sdp_domain, domain_subj, domain_obj = tree_to_adj(l, domains, tree,entity_chains,sdp_domain)
             # relpairs = rawrelpair
             obj_mask=[-1]*l
             subj_mask=[-1]*l
@@ -347,14 +342,14 @@ class DataLoader(object):
                 rsubjmask=copy.deepcopy(subj_mask)
                 robjmask=copy.deepcopy(obj_mask)
 
-                # for entity_pair in entity_chains[1:]:
-                #     entity_span=entity_pair[0]
-                #     entity_ner=ner[entity_span[0]]
-                #     if entity_ner==2:
-                #         entity_ner=3
-                #     rtokens[entity_span[0]:entity_span[-1] + 1] = ['ENTITY_' +id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)
-                #     rrawtokens[entity_span[0]:entity_span[-1] + 1] = zip(rrawtokens[entity_span[0]:entity_span[-1] + 1], (
-                #             ['ENTITY_' + id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)))
+                for entity_pair in entity_chains[1:]:
+                    entity_span=entity_pair[0]
+                    entity_ner=ner[entity_span[0]]
+                    if entity_ner==2:
+                        entity_ner=3
+                    rtokens[entity_span[0]:entity_span[-1] + 1] = ['ENTITY_' +id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)
+                    rrawtokens[entity_span[0]:entity_span[-1] + 1] = zip(rrawtokens[entity_span[0]:entity_span[-1] + 1], (
+                            ['ENTITY_' + id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)))
 
                 rtokens[subj_span[0]:subj_span[-1] + 1] = ['SUBJ-' + rd['subj_type']] * (subj_span[-1] - subj_span[0] + 1)
                 #rtokens[subj_span[0]:subj_span[-1] + 1] = ['ENTITY_' + rd['subj_type']] * (
@@ -371,12 +366,13 @@ class DataLoader(object):
                 mask = [1] * len(rtokens)
                 if containDot:
                     mask[-1] = 0
-                aspect.append((rtokens, pos, rsubjmask, robjmask, ner, depmap, ret, rel, resrel, deprel, domain,domain_id,redomain_id,mask,sid,iscross, distance, relation,rrawtokens))
+                aspect.append((rtokens, pos, rsubjmask, robjmask, ner, depmap, ret, rel, resrel, deprel, domain,sdp_domain,domain_subj,
+                domain_obj, mask,sid,iscross, distance, relation,rrawtokens))
 
             if [src_subj,src_obj] not in relpairs:
-                tree, domains, distanceraw,relpair,midhead= head_to_treeEval(head, deprel,[[src_subj,src_obj]],build_mid=True)
+                tree, domains, distanceraw,relpair,midhead,entity_chains,sdp_domain = head_to_treeEval(head, deprel,ner, pos,[[src_subj,src_obj]],build_mid=True)
                 distance=distanceraw
-                depmap, ret, rel, resrel, domain,domain_id,redomain_id= tree_to_adj(l, domains, tree)
+                depmap, ret, rel, resrel, domain, sdp_domain,domain_subj, domain_obj = tree_to_adj(l, domains, tree,entity_chains,sdp_domain)
                 obj_span=src_obj
                 subj_span=src_subj
                 rtokens = copy.deepcopy(tokens)
@@ -384,13 +380,12 @@ class DataLoader(object):
                 rsubjmask = copy.deepcopy(subj_mask)
                 robjmask = copy.deepcopy(obj_mask)
 
-                # for entity_pair in entity_chains[1:]:
-                #     entity_span=entity_pair[-1]
-                #     entity_ner=ner[entity_span[0]]
-                #     if entity_ner==2:
-                #         entity_ner=3
-                #     rtokens[entity_span[0]:entity_span[-1] + 1] = ['ENTITY_' +id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)
-                #     rrawtokens[entity_span[0]:entity_span[-1] + 1] = zip(rrawtokens[entity_span[0]:entity_span[-1] + 1],(['ENTITY_' + id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)))
+                for entity_pair in entity_chains[1:]:
+                    entity_span=entity_pair[-1]
+                    entity_ner=ner[entity_span[0]]
+
+                    rtokens[entity_span[0]:entity_span[-1] + 1] = ['ENTITY_' +id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)
+                    rrawtokens[entity_span[0]:entity_span[-1] + 1] = zip(rrawtokens[entity_span[0]:entity_span[-1] + 1],(['ENTITY_' + id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)))
                 rtokens[subj_span[0]:subj_span[-1] + 1] = ['SUBJ-' + rd['subj_type']] * (subj_span[-1] - subj_span[0] + 1)
 
                 # rtokens[subj_span[0]:subj_span[-1] + 1] = ['ENTITY_' + rd['subj_type']] * (
@@ -408,12 +403,12 @@ class DataLoader(object):
                 if containDot:
                     mask[-1] = 0
                 aspect.append(
-                    (rtokens, pos, rsubjmask, robjmask, ner, depmap, ret, rel, resrel, deprel, domain, domain_id,
-                     redomain_id, mask, sid, iscross,distance, relation, rrawtokens))
+                    (rtokens, pos, rsubjmask, robjmask, ner, depmap, ret, rel, resrel, deprel, domain, sdp_domain,domain_subj,
+                     domain_obj, mask, sid, iscross,distance, relation, rrawtokens))
         # if len(aspect)<2 or relation!=0:
         #     return []
-        # if distance<6:
-        #     return []
+        if distance<6:
+            return []
         # subj_type = [constant.SUBJ_NER_TO_ID[d['subj_type']]]
         # obj_type = [constant.OBJ_NER_TO_ID[d['obj_type']]]
         # processed += [(tokens, pos, ner, deprel, head, subj_positions, obj_positions, subj_type, obj_type, length,relation)]
@@ -749,12 +744,12 @@ class DataLoader(object):
         batch_mm = batch_mm / batch_mm.sum(dim=-1).unsqueeze(-1)
         lens = [len(x) for x in batch[0]]
         maxlen=lens[0]
-        #sdp_domain_len=[b.sum() for b in batch[11]]
+        sdp_domain_len=[b.sum() for b in batch[11]]
         domain_len = [b.shape[1] for b in batch[10]]
         max_domain=max(domain_len)
-        # nid=torch.from_numpy((np.array(sdp_domain_len)*(-1)).argsort())
-        # rid=torch.linspace(0,batch_size-1,batch_size).long()
-        # order_mm=torch.sparse_coo_tensor(torch.cat((rid.unsqueeze(0),nid.unsqueeze(0)),dim=0),torch.ones(batch_size),(batch_size,batch_size)).to_dense()
+        nid=torch.from_numpy((np.array(sdp_domain_len)*(-1)).argsort())
+        rid=torch.linspace(0,batch_size-1,batch_size).long()
+        order_mm=torch.sparse_coo_tensor(torch.cat((rid.unsqueeze(0),nid.unsqueeze(0)),dim=0),torch.ones(batch_size),(batch_size,batch_size)).to_dense()
 
         # word dropout
         if not self.eval:
@@ -778,10 +773,10 @@ class DataLoader(object):
         resrel = padmat(batch[8], maxlen, maxlen)
         deprel = get_long_tensor(batch[9], batch_size)
         domain = padmat(batch[10], maxlen,max_domain)
-        domain_id = padmat(batch[11], maxlen,max_domain)
-        redomain_id = padmat(batch[12], maxlen,max_domain)
-        # domain_obj = padmat(batch[13], maxlen,max_domain)
-        sdp_mask = get_long_tensor(batch[13],batch_size)
+        sdp_domain = padmat(batch[11], maxlen,max_domain)
+        domain_subj = padmat(batch[12], maxlen,max_domain)
+        domain_obj = padmat(batch[13], maxlen,max_domain)
+        sdp_mask = get_long_tensor(batch[14],batch_size)
         # head = get_long_tensor(batch[4], batch_size)
 
         # subj_type = get_long_tensor(batch[7], batch_size)
@@ -791,17 +786,17 @@ class DataLoader(object):
         sid=[]
         iscross=[]
         count=-1
-        for i in range(len(batch[16])):
+        for i in range(len(batch[17])):
             if batch_map[i]>count:
-                length.append(batch[16][i])
-                sid.append(batch[14][i])
-                iscross.append(batch[15][i])
-                rels.append(batch[17][i])
+                length.append(batch[17][i])
+                sid.append(batch[15][i])
+                iscross.append(batch[16][i])
+                rels.append(batch[18][i])
                 count=batch_map[i]
         length=torch.LongTensor(length)
         rels = torch.LongTensor(rels)
         iscross=torch.LongTensor(iscross)
-        return (words, masks, pos,subj_pos,obj_pos,ner, depmap, ret, rel,resrel,deprel,domain,domain_id,redomain_id,sdp_mask,batch_mm,rels,sid,iscross, orig_idx,length,batch[-1])
+        return (words, masks, pos,subj_pos,obj_pos,ner, depmap, ret, rel,resrel,deprel,domain,sdp_domain,domain_subj,domain_obj,order_mm,sdp_mask,batch_mm,rels,sid,iscross, orig_idx,length,batch[-1])
 
     def augTrainData(self, ids, labels):
         augdata = []

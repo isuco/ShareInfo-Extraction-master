@@ -71,16 +71,16 @@ def getmaxn(tensor,n):
 
 def unpack_batch(batch, cuda):
     if cuda:
-        inputs = [Variable(b.cuda()) for b in batch[:16]]
-        labels = Variable(batch[16].cuda())
-        distance=batch[20].cuda()
+        inputs = [Variable(b.cuda()) for b in batch[:18]]
+        labels = Variable(batch[18].cuda())
+        distance=batch[22].cuda()
     else:
-        inputs = [Variable(b) for b in batch[:16]]
-        labels = Variable(batch[16])
-        distance=batch[20]
+        inputs = [Variable(b) for b in batch[:18]]
+        labels = Variable(batch[18])
+        distance=batch[22]
     tokens = batch[0]
-    ids=batch[1]
-    iscross=batch[19]
+    ids=batch[19]
+    iscross=batch[20]
     #head = batch[5]
     #subj_pos = batch[6]
     #obj_pos = batch[7]
@@ -195,7 +195,7 @@ class GCNTrainer(Trainer):
 
     def predict(self, batch, unsort=True):
         inputs, labels, tokens, distance,ids,iscross = unpack_batch(batch, self.opt['cuda'])
-        orig_idx = batch[19]
+        orig_idx = batch[21]
         batch_size = labels.shape[0]
         # forward
         self.model.eval()

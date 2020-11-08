@@ -121,7 +121,7 @@ with torch.cuda.device(1):
     #     model_file = args.model_dir +'/'+subj+"_"+obj+"_"+"best_model.pt"
     # else:
     #     model_file = args.model_dir + '/best_model.pt'
-    model_file=args.model_dir+'/best_model_overfit' \
+    model_file=args.model_dir+'/best_model' \
                               '.pt'
     print("Loading model from {}".format(model_file))
     opt = torch_utils.load_config(model_file)
@@ -143,8 +143,8 @@ with torch.cuda.device(1):
 
     key+=batch.gold()
 
-    # with open('samples.json','w') as f:
-    #     json.dump(samples,f,indent=4)
+    with open('samples.json','w') as f:
+        json.dump(samples,f,indent=4)
 
 predictions = [id2label[p] for p in predictions]
 p, r, f1 = scorer.score(batch, predictions, verbose=True)
