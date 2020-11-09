@@ -42,7 +42,7 @@ parser.add_argument('--heads', type=int, default=3, help='Num of heads in multi-
 parser.add_argument('--sublayer_first', type=int, default=3, help='Num of the first sublayers in dcgcn block.')
 parser.add_argument('--sublayer_second', type=int, default=3, help='Num of the second sublayers in dcgcn block.')
 parser.add_argument('--pooling', choices=['max', 'avg', 'sum'], default='max', help='Pooling function type. Default max.')
-parser.add_argument('--pooling_l2', type=float, default=0., help='L2-penalty for all pooling output.')
+parser.add_argument('--pooling_l2', type=float, default=0.01, help='L2-penalty for all pooling output.')
 parser.add_argument('--mlp_layers', type=int, default=1, help='Number of output mlp layers.')
 parser.add_argument('--no_adj', dest='no_adj', action='store_true', help="Zero out adjacency matrix for ablation.")
 parser.add_argument('--no-rnn', dest='rnn', action='store_false', help='Do not use RNN layer.')

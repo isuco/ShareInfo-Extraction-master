@@ -189,22 +189,14 @@ def head_to_tree(head,deprel,subj_idx,obj_idx,entity_ids):
     return root,domains+1,sdplength
 #
 
-def head_to_treeEval(head,deprel,ners,pos,relpairs,build_mid):
+def head_to_treeEval(head,deprel,ners,pos,entity_ner,entity_pos,relpairs,build_mid):
 # def head_to_tree(head,deprel, len_):
     """
     Convert a sequence of head indexes into a tree object.
     """
     #head = head[:len_].tolist()
-    ner2id=constant.NER_TO_ID
-    entity_ner=[]
-    for n in list(constant.OBJ_NER_TO_ID.keys()):
-        if n in ner2id.keys():
-            entity_ner.append(ner2id[n])
-    entity_pos=[15,20]
-    entity_ner.remove(0)
-    entity_ner.remove(1)
-    appos=constant.appos
     root = None
+
     midhead=[-1 for _ in head]
     nodes = [Tree() for _ in head]
     pairlist=[]
@@ -216,6 +208,8 @@ def head_to_treeEval(head,deprel,ners,pos,relpairs,build_mid):
         h = head[i]
         nodes[i].idx = i
         nodes[i].rel = deprel[i]
+        nodes[i].pos = pos[i]
+        nodes[i].ner = ners[i]
         nodes[i].dist = -1  # just a filler
         if h == 0:
             root = nodes[i]
@@ -224,6 +218,11 @@ def head_to_treeEval(head,deprel,ners,pos,relpairs,build_mid):
 
     assert root is not None
     spdlca,sdp_path,sdplength,pair_id=getSDPAncestorEval(root,pairlist)
+    domains=0
+
+
+
+
     subj_nodes=pairlist[pair_id][0]
     obj_nodes=pairlist[pair_id][-1]
     pair=relpairs[pair_id]
@@ -275,7 +274,7 @@ def head_to_treeEval(head,deprel,ners,pos,relpairs,build_mid):
                 if not(inter(entity,subj_idxs) or inter(entity,obj_idxs)):
                     entities.append(entity)
         elif pos[i] in entity_pos and nodes[i].sdpdis==0:
-            entity.append([i])
+            entities.append([i])
         i+=1
 
     # entity_chains=[]
@@ -368,10 +367,8 @@ def head_to_treeEval(head,deprel,ners,pos,relpairs,build_mid):
 
     entity_chains = []
     # rid=root.idx
-    sdp_domain=[]
     # domain_subj=tree_to_dis(su,None,0,0)
 
-    domains=0
     # searchqueue=[]
     # while len(queue):
     #     cur=queue[0]
@@ -379,49 +376,81 @@ def head_to_treeEval(head,deprel,ners,pos,relpairs,build_mid):
     #         searchqueue.append(subj_idxs)
     #     else:
 
+    sdpentitynodes=[]
+    domsubj=sdp_path[0].idx
+    for node in sdp_path:
+        if node.idx not in subj_idxs and node.idx not in obj_idxs:
+            obj = dfs(node, None, entity_pos, entity_ner)
+            if obj is not None:
+                sdpentitynodes.append(node.idx)
+                subj_entity=[domsubj]
+                obj_entity=[obj.idx]
+                for ent in entities:
+                    if domsubj in ent:
+                        subj_entity=ent
+                    if obj.idx in ent:
+                        obj_entity=ent
+                entity_chains.append([subj_entity,obj_entity])
+                domsubj=obj.idx
+    #sdpentitynodes.append(sdp_path[-1].idx)
+    subj_entity=[domsubj]
+    for ent in entities:
+        if domsubj in ent:
+            subj_entity=ent
+    entity_chains.append([subj_entity,obj_idxs])
 
+    domain=0
+    labdom(sdp_path[0],None,set([domain]))
+    for node in sdp_path:
+        if node.idx in sdpentitynodes:
+            domain+=1
+            tempd=set((domain-1,domain))
+        else:
+            tempd=set([domain])
+        labdom(node,None,tempd)
+    labdom(sdp_path[-1],None,set([domain]))
+    sdp_domain=list(range(domain+1))
     # subj_entity=nodes[dom_subj_id]
-    dom_subj_entity=dom_subj_id
-    raw_entities=copy.deepcopy(entities)
-    while(dom_subj_entity is not None):
-        next_subj_entity=None
-        next_list=[]
-        for subj_i in dom_subj_entity:
-            subj_n=nodes[subj_i]
-            for child in subj_n.children:
-                if child.idx not in dom_subj_entity:
-                    next_list.append(child)
-            if (subj_n.parent is not None) and (subj_n.parent.idx not in dom_subj_entity):
-                next_list.append(subj_n.parent)
-        # next_list+=next_subj.children
-        entities.remove(dom_subj_entity)
-        # if next_subj.parent is not None:
-        #     next_list.append(next_subj.parent)
-        for next in next_list:
-            for subj_i in dom_subj_entity:
-                nodes[subj_i].domainids.add(domains)
-            _,dom_obj_entity=tree_to_dis(next,entities,0,domains)
-            if dom_obj_entity is not None:
-                chain=[dom_subj_entity,dom_obj_entity]
-                if chain in entity_chains:
-                    domains=domains-1
-                else:
-                    entity_chains.append(chain)
-                    sdp_domain.append(domains)
-                    next_subj_entity=dom_obj_entity
-            domains=domains+1
-        dom_subj_entity=next_subj_entity
+    # dom_subj_entity=dom_subj_id
+    # raw_entities=copy.deepcopy(entities)
+    # while(dom_subj_entity is not None):
+    #     next_subj_entity=None
+    #     next_list=[]
+    #     for subj_i in dom_subj_entity:
+    #         subj_n=nodes[subj_i]
+    #         for child in subj_n.children:
+    #             if child.idx not in dom_subj_entity:
+    #                 next_list.append(child)
+    #         if (subj_n.parent is not None) and (subj_n.parent.idx not in dom_subj_entity):
+    #             next_list.append(subj_n.parent)
+    #     # next_list+=next_subj.children
+    #     entities.remove(dom_subj_entity)
+    #     # if next_subj.parent is not None:
+    #     #     next_list.append(next_subj.parent)
+    #     for next in next_list:
+    #         for subj_i in dom_subj_entity:
+    #             nodes[subj_i].domainids.add(domains)
+    #         _,dom_obj_entity=tree_to_dis(next,entities,0,domains)
+    #         if dom_obj_entity is not None:
+    #             chain=[dom_subj_entity,dom_obj_entity]
+    #             if chain in entity_chains:
+    #                 domains=domains-1
+    #             else:
+    #                 entity_chains.append(chain)
+    #                 sdp_domain.append(domains)
+    #                 next_subj_entity=dom_obj_entity
+    #         domains=domains+1
+    #     dom_subj_entity=next_subj_entity
+    #
+    #
+    # for entity in raw_entities:
+    #     entity_domains=set()
+    #     for n in entity:
+    #         entity_domains=entity_domains.union(nodes[n].domainids)
+    #     for m in entity:
+    #         nodes[m].domainids=nodes[m].domainids.union(entity_domains)
 
-
-    for entity in raw_entities:
-        entity_domains=set()
-        for n in entity:
-            entity_domains=entity_domains.union(nodes[n].domainids)
-        for m in entity:
-            nodes[m].domainids=nodes[m].domainids.union(entity_domains)
-
-    return root,domains,sdplength,relpairs[pair_id],midhead,entity_chains,sdp_domain
-#
+    return root,domain+1,sdplength,relpairs[pair_id],midhead,entity_chains,sdp_domain
 # def head_to_treeEval(head,deprel,subj_ids,obj_ids,build_mid):
 # # # def head_to_tree(head,deprel, len_):
 #     """
@@ -502,6 +531,28 @@ def head_to_treeEval(head,deprel,ners,pos,relpairs,build_mid):
 #                         nodestack.append(h)
 #                     cur=h
 #return root,domains+1,sdplength,relpairs[pair_id],midhead
+
+def dfs(cur,src,pos,ner):
+    if cur.pos in pos or cur.ner in ner:
+        return cur
+    entity=None
+    for child in cur.children:
+        if child!=src and child.sdpdis!=0:
+            entity=dfs(child,cur,pos,ner)
+            if entity is not None:
+                return entity
+    if cur.parent is not None and cur.parent!=src and cur.parent.sdpdis!=0:
+        entity = dfs(cur.parent, cur, pos, ner)
+    return entity
+
+def labdom(cur,src,domains):
+    cur.domainids=cur.domainids.union(domains)
+    for child in cur.children:
+        if child !=src and child.sdpdis!=0:
+            labdom(child,cur,domains)
+    if cur.parent is not None and cur.parent!=src and cur.parent.sdpdis!=0:
+        labdom(cur.parent,cur,domains)
+
 
 def tree_to_dis(cur,src,sdpdis,domain):
     if len(cur.domainids)!=0:

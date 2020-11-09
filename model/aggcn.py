@@ -287,11 +287,11 @@ class GCNRelationModel(nn.Module):
         aspect_output = self.reldropout(self.relproj(torch.cat((aspect_h_pool, aspect_subj, aspect_obj), dim=-1)))
         #aspect_output = self.relproj(torch.cat((aspect_h_pool, aspect_subj, aspect_obj), dim=-1))
 
-        #aspect_dom_h = aspect_h.unsqueeze(2).repeat(1,1,domain.shape[-1],1).masked_fill(domain.unsqueeze(-1)==0,-constant.INFINITY_NUMBER).max(dim=1)[0]
+        aspect_dom_h = aspect_h.unsqueeze(2).repeat(1,1,domain.shape[-1],1).masked_fill(domain.unsqueeze(-1)==0,-constant.INFINITY_NUMBER).max(dim=1)[0]
         #aspect_dom_h = torch.where(aspect_h_pool<-1e11,torch.zeros_like(aspect_h_pool),aspect_h_pool).unsqueeze(1).repeat(1,domain.shape[-1],1)
-        #aspect_dom_h = torch.where(aspect_dom_h < -1e11, torch.zeros_like(aspect_dom_h), aspect_dom_h)
+        #aspect_dom_h = torch.where(laspect_dom_h < -1e11, torch.zeros_like(aspect_dom_h), aspect_dom_h)
         #aspect_dom_h_pool=aspect_dom_h.mean(dim=1)
-        aspect_dom_h = aspect_h_pool.unsqueeze(dim=1).repeat(1,domain.shape[-1],1)
+        #aspect_dom_h = aspect_h_pool.unsqueeze(dim=1).repeat(1,domain.shape[-1],1)
         aspect_dom_subj = aspect_h.unsqueeze(2).repeat(1, 1,domain_subj.shape[-1], 1).masked_fill(domain_subj.unsqueeze(-1)==0,-constant.INFINITY_NUMBER).max(dim=1)[0]
         aspect_dom_obj = aspect_h.unsqueeze(2).repeat(1, 1,domain_obj.shape[-1], 1).masked_fill(domain_obj.unsqueeze(-1)==0,-constant.INFINITY_NUMBER).max(dim=1)[0]
         aspect_rel_input=self.relproj(torch.cat((aspect_dom_h,aspect_dom_subj,aspect_dom_obj),dim=-1))
@@ -449,7 +449,7 @@ class AGGCN(nn.Module):
         # print('aggcn:'+str(torch.cuda.memory_allocated()))
         domain=domain.float()
 
-        domain_mask=domain.bmm(domain.transpose(-1,-2))
+        domain_mask=domain.bmm(domain.transpose(-1,-2))!=0
         domain_mask=domain_mask.masked_fill(torch.eye(domain_mask.shape[-1]).unsqueeze(0).cuda()==1,0)
         for i in range(len(self.layers)):
             # outputs = self.layers[i](adj, outputs)  # gcl
@@ -820,10 +820,10 @@ def weightsoftmax(data, adj=None,mask=None):
     data = data - data.max(dim=-1)[0].unsqueeze(-1)
     data_exp = torch.exp(data)
     if adj is not None:
-        data_exp=data_exp.mul(adj.unsqueeze(1))
-    data_exp = data_exp + 1e-10
+        data_exp=data_exp.mul(adj.unsqueeze(1).float())
     if mask is not None:
         data_exp=data_exp.masked_fill(mask==0,0)
+    data_exp = data_exp + 1e-10
     weight = (data_exp / (data_exp.sum(dim=-1).unsqueeze(dim=-1))).masked_fill(mask==0,0)
     return weight
 
@@ -863,7 +863,7 @@ def attention(query, key, adj, mask=None, dropout=None):
     # scores = scores.masked_fill(adj.unsqueeze(dim=1)==0,-1e9)
 
     p_attn = weightsoftmax(scores, adj,mask)
-    mask = ((mask==0)|(scores<0)|(adj==0).unsqueeze(1))
+    mask = ((mask==0)|thresh_mask|(adj==0).unsqueeze(1))
     # mask = ((mask == 0) | (adj == 0).unsqueeze(1))
     p_attn=p_attn.masked_fill(mask,0)
     if dropout is not None:

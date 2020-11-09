@@ -38,7 +38,7 @@ class DataLoader(object):
         data=[]
         for filename in filenames:
             with open(filename,'r') as infile:
-                data += json.load(infile)[:1280]
+                data += json.load(infile)
         self.data_json = data
         if is_aug:
             aug_data = self.simulatedatajson(data)
@@ -139,8 +139,8 @@ class DataLoader(object):
         for d in data:
             # if d['id']=='61b3a65fb91fbb9fcc5b':
             #     continue
-            if d['id'] not in self.ids:
-                continue
+            # if d['id'] not in self.ids:
+            #     continue
             # if (d['id'] in self.ids)^(d['id'] not in self.ids64):
             #     continue
             count+=1
@@ -187,9 +187,9 @@ class DataLoader(object):
                 relation = self.label2id[relation]
         else:
             relation = d['soft_label']
-        if self.subj is not None:
-            if d['subj_type']!=self.subj or d['obj_type']!=self.obj:
-                return []
+        # if self.subj is not None:
+        #     if d['subj_type']!=self.subj or d['obj_type']!=self.obj:
+        #         return []
         #rev_relation = 0
         # # if relation!=40:
         #     continue
@@ -292,7 +292,15 @@ class DataLoader(object):
                 if deprel[i] in entity_dep:
                     entity_ids.append([i])
 
-            tree, domains, distance,relpair,midhead,entity_chains,sdp_domain = head_to_treeEval(head, deprel, ner,pos,relpairs,build_mid=True)
+
+            entity_ner = [ners2id[d['subj_type']]]
+            if d['obj_type'] in ners2id.keys():
+                entity_ner.append(ners2id[d['obj_type']])
+            if 3 in entity_ner:
+                entity_pos = [15, 20]
+            else:
+                entity_pos = []
+            tree, domains, distance,relpair,midhead,entity_chains,sdp_domain = head_to_treeEval(head, deprel, ner,pos,entity_ner,entity_pos,relpairs,build_mid=True)
             # filterrelpair=[]
             # for pair in relpairs:
             #     subj=pair[0]
@@ -344,12 +352,12 @@ class DataLoader(object):
 
                 for entity_pair in entity_chains[1:]:
                     entity_span=entity_pair[0]
-                    entity_ner=ner[entity_span[0]]
-                    if entity_ner==2:
-                        entity_ner=3
-                    rtokens[entity_span[0]:entity_span[-1] + 1] = ['ENTITY_' +id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)
+                    entityner=ner[entity_span[0]]
+                    if entityner==2:
+                        entityner=3
+                    rtokens[entity_span[0]:entity_span[-1] + 1] = ['ENTITY_' +id2ners[entityner]] * (entity_span[-1] - entity_span[0] + 1)
                     rrawtokens[entity_span[0]:entity_span[-1] + 1] = zip(rrawtokens[entity_span[0]:entity_span[-1] + 1], (
-                            ['ENTITY_' + id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)))
+                            ['ENTITY_' + id2ners[entityner]] * (entity_span[-1] - entity_span[0] + 1)))
 
                 rtokens[subj_span[0]:subj_span[-1] + 1] = ['SUBJ-' + rd['subj_type']] * (subj_span[-1] - subj_span[0] + 1)
                 #rtokens[subj_span[0]:subj_span[-1] + 1] = ['ENTITY_' + rd['subj_type']] * (
@@ -370,7 +378,7 @@ class DataLoader(object):
                 domain_obj, mask,sid,iscross, distance, relation,rrawtokens))
 
             if [src_subj,src_obj] not in relpairs:
-                tree, domains, distanceraw,relpair,midhead,entity_chains,sdp_domain = head_to_treeEval(head, deprel,ner, pos,[[src_subj,src_obj]],build_mid=True)
+                tree, domains, distanceraw,relpair,midhead,entity_chains,sdp_domain = head_to_treeEval(head, deprel,ner, pos,entity_ner,entity_pos,[[src_subj,src_obj]],build_mid=True)
                 distance=distanceraw
                 depmap, ret, rel, resrel, domain, sdp_domain,domain_subj, domain_obj = tree_to_adj(l, domains, tree,entity_chains,sdp_domain)
                 obj_span=src_obj
@@ -382,10 +390,11 @@ class DataLoader(object):
 
                 for entity_pair in entity_chains[1:]:
                     entity_span=entity_pair[-1]
-                    entity_ner=ner[entity_span[0]]
-
-                    rtokens[entity_span[0]:entity_span[-1] + 1] = ['ENTITY_' +id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)
-                    rrawtokens[entity_span[0]:entity_span[-1] + 1] = zip(rrawtokens[entity_span[0]:entity_span[-1] + 1],(['ENTITY_' + id2ners[entity_ner]] * (entity_span[-1] - entity_span[0] + 1)))
+                    entityner=ner[entity_span[0]]
+                    if entityner==2:
+                        entityner=3
+                    rtokens[entity_span[0]:entity_span[-1] + 1] = ['ENTITY_' +id2ners[entityner]] * (entity_span[-1] - entity_span[0] + 1)
+                    rrawtokens[entity_span[0]:entity_span[-1] + 1] = zip(rrawtokens[entity_span[0]:entity_span[-1] + 1],(['ENTITY_' + id2ners[entityner]] * (entity_span[-1] - entity_span[0] + 1)))
                 rtokens[subj_span[0]:subj_span[-1] + 1] = ['SUBJ-' + rd['subj_type']] * (subj_span[-1] - subj_span[0] + 1)
 
                 # rtokens[subj_span[0]:subj_span[-1] + 1] = ['ENTITY_' + rd['subj_type']] * (
@@ -407,8 +416,6 @@ class DataLoader(object):
                      domain_obj, mask, sid, iscross,distance, relation, rrawtokens))
         # if len(aspect)<2 or relation!=0:
         #     return []
-        if distance<6:
-            return []
         # subj_type = [constant.SUBJ_NER_TO_ID[d['subj_type']]]
         # obj_type = [constant.OBJ_NER_TO_ID[d['obj_type']]]
         # processed += [(tokens, pos, ner, deprel, head, subj_positions, obj_positions, subj_type, obj_type, length,relation)]
